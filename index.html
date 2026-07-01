@@ -101,7 +101,7 @@
 
     // Câmara
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 0, 0);
+    camera.position.set(0, 1.6, 0);
 
     // Renderizador
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -114,7 +114,7 @@
     document.body.appendChild(VRButton.createButton(renderer));
 
     // Luzes
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
     dirLight.position.set(2, 5, 3);
@@ -122,31 +122,68 @@
     const backLight = new THREE.DirectionalLight(0x4488ff, 0.4);
     backLight.position.set(-2, 0, -3);
     scene.add(backLight);
-    const fillLight = new THREE.HemisphereLight(0x4488ff, 0x0f2d66, 0.6);
-    scene.add(fillLight);
 
-    // ----- CRIAR O DADO 3D COM IMAGENS -----
-    const tamanho = 1.6; // Tamanho do dado
-    const distancia = 5.5; // Distância do dado (mais longe para ler bem)
+    // ----- GRUPO QUE ACOMPANHA A CÂMARA (dado fixo na visão) -----
+    const cameraGroup = new THREE.Group();
+    cameraGroup.position.set(0, 0, -5.5); // Distância do dado (5.5 unidades à frente)
+    scene.add(cameraGroup);
+
+    // ----- CRIAR O DADO 3D COM IMAGENS + FRASES -----
+    const tamanho = 1.6;
     const geometry = new THREE.BoxGeometry(tamanho, tamanho, tamanho);
     
-    // Mapeamento das faces com imagens (nomes originais)
+    // Mapeamento das faces com imagens e frases
     const facesData = [
-      { nome: 'ABRANDA',  imagem: 'abranda.jpeg',  desc: 'Abranda o ritmo antes de agir',       cor: 0xf26a00 },
-      { nome: 'RESPIRA',  imagem: 'respira.jpeg',  desc: 'Inspira 4s, expira 6s',                cor: 0x007bd1 },
-      { nome: 'EQUILIBRA',imagem: 'equilibra.jpeg',desc: 'Larga o que pesa, mantém o que ajuda', cor: 0x3c8f25 },
-      { nome: 'CUIDA',    imagem: 'cuida.jpeg',    desc: 'Beber água, descansar, pedir ajuda', cor: 0xe11d25 },
-      { nome: 'ESCUTA',   imagem: 'escuta.jpeg',   desc: 'Atenção sem pressa',                  cor: 0xf5b800 },
-      { nome: 'RECOMEÇA', imagem: 'recomeca.jpeg', desc: 'Tenta outra vez com calma',           cor: 0x009c9c }
+      { nome: 'ABRANDA',  frase: 'Abranda o ritmo antes de agir',       imagem: 'abranda.jpeg',  cor: 0xf26a00 },
+      { nome: 'RESPIRA',  frase: 'Inspira 4s, expira 6s',                imagem: 'respira.jpeg',  cor: 0x007bd1 },
+      { nome: 'EQUILIBRA',frase: 'Larga o que pesa, mantém o que ajuda', imagem: 'equilibra.jpeg',cor: 0x3c8f25 },
+      { nome: 'CUIDA',    frase: 'Beber água, descansar, pedir ajuda',   imagem: 'cuida.jpeg',    cor: 0xe11d25 },
+      { nome: 'ESCUTA',   frase: 'Atenção sem pressa',                  imagem: 'escuta.jpeg',   cor: 0xf5b800 },
+      { nome: 'RECOMEÇA', frase: 'Tenta outra vez com calma',           imagem: 'recomeca.jpeg', cor: 0x009c9c }
     ];
 
-    // Função para carregar texturas das imagens
-    const textureLoader = new THREE.TextureLoader();
-    let materiais = [];
-
-    function criarMaterial(face) {
+    // Função para gerar textura com imagem + frase abaixo
+    function gerarTextura(face) {
       return new Promise((resolve) => {
-        textureLoader.load(face.imagem, (texture) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1024;
+        canvas.height = 1024;
+        const ctx = canvas.getContext('2d');
+
+        // Fundo branco
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, 1024, 1024);
+
+        // Borda colorida
+        ctx.strokeStyle = '#' + face.cor.toString(16).padStart(6, '0');
+        ctx.lineWidth = 30;
+        ctx.strokeRect(30, 30, 964, 964);
+
+        // Tentar carregar a imagem
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = face.imagem;
+
+        img.onload = () => {
+          // Desenhar a imagem no topo (60% da altura)
+          const imgSize = 550;
+          const imgX = (1024 - imgSize) / 2;
+          const imgY = 80;
+          ctx.drawImage(img, imgX, imgY, imgSize, imgSize);
+
+          // Nome grande (centro)
+          ctx.fillStyle = '#' + face.cor.toString(16).padStart(6, '0');
+          ctx.font = 'bold 100px Segoe UI, Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(face.nome, 512, 660);
+
+          // Frase abaixo do nome
+          ctx.fillStyle = '#334155';
+          ctx.font = '42px Segoe UI, Arial';
+          ctx.fillText(face.frase, 512, 780);
+
+          const texture = new THREE.CanvasTexture(canvas);
           const material = new THREE.MeshStandardMaterial({
             map: texture,
             roughness: 0.3,
@@ -154,58 +191,51 @@
             side: THREE.DoubleSide
           });
           resolve(material);
-        }, undefined, () => {
-          // Fallback com texto se imagem não carregar
-          const canvas = document.createElement('canvas');
-          canvas.width = 512;
-          canvas.height = 512;
-          const ctx = canvas.getContext('2d');
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, 512, 512);
-          ctx.strokeStyle = '#' + face.cor.toString(16).padStart(6, '0');
-          ctx.lineWidth = 20;
-          ctx.strokeRect(20, 20, 472, 472);
+        };
+
+        img.onerror = () => {
+          // Fallback sem imagem
           ctx.fillStyle = '#' + face.cor.toString(16).padStart(6, '0');
-          ctx.font = 'bold 80px Segoe UI, Arial';
+          ctx.font = 'bold 120px Segoe UI, Arial';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(face.nome, 256, 256);
-          const textureFallback = new THREE.CanvasTexture(canvas);
+          ctx.fillText(face.nome, 512, 450);
+          
+          ctx.fillStyle = '#334155';
+          ctx.font = '50px Segoe UI, Arial';
+          ctx.fillText(face.frase, 512, 600);
+
+          const texture = new THREE.CanvasTexture(canvas);
           const material = new THREE.MeshStandardMaterial({
-            map: textureFallback,
+            map: texture,
             roughness: 0.3,
             metalness: 0.1
           });
           resolve(material);
-        });
+        };
       });
     }
 
-    // Carregar todas as imagens
-    const promises = facesData.map(f => criarMaterial(f));
+    // Carregar todas as texturas
+    const promises = facesData.map(f => gerarTextura(f));
     Promise.all(promises).then((mats) => {
-      materiais = mats;
-      const dice = new THREE.Mesh(geometry, materiais);
+      const dice = new THREE.Mesh(geometry, mats);
       
-      // Posicionar o dado FIXO NA VISÃO (como filho da câmara)
-      dice.position.set(0, 0, -distancia); // Z negativo = para frente da câmara
-      camera.add(dice);
+      // Adicionar o dado ao grupo (fixo na visão)
+      cameraGroup.add(dice);
       
-      // Adicionar o dado à cena (a câmara já está na cena)
-      scene.add(camera);
-      
-      // Guardar referência global
+      // Guardar referência
       window.diceMesh = dice;
       
-      // Iniciar lógica de rotação
+      // Iniciar lógica
       iniciarLogica(dice);
     });
 
-    // Lógica de rotação e sensor de movimento
+    // ----- LÓGICA DE ROTAÇÃO E SENSOR -----
     function iniciarLogica(dice) {
       let isSpinning = false;
       
-      // ----- SENSOR DE MOVIMENTO (GIRAR CABEÇA 2x) -----
+      // Sensor de movimento (girar cabeça 2x)
       let lastGamma = 0;
       let movimentoCount = 0;
       let ultimoMovimentoTime = 0;
@@ -243,14 +273,14 @@
         statusEl.textContent = '⚠️ Sensor não disponível. Usa toque no ecrã.';
       }
 
-      // ----- FUNÇÃO GIRAR DADO (com rotação suave) -----
+      // Função para girar o dado
       function girarDado() {
         if (isSpinning) return;
         isSpinning = true;
 
         const idx = Math.floor(Math.random() * facesData.length);
         const faceNome = facesData[idx].nome;
-        const faceDesc = facesData[idx].desc;
+        const faceFrase = facesData[idx].frase;
         const faceCor = facesData[idx].cor;
 
         // Rotação para cada face ficar para cima (eixo Z porque o dado está à frente)
@@ -286,33 +316,33 @@
             dice.rotation.x = extraX;
             dice.rotation.y = extraY;
             isSpinning = false;
-            mostrarResultado(faceNome, faceDesc, faceCor);
+            mostrarResultado(faceNome, faceFrase, faceCor);
           }
         }
         animateRotation();
       }
 
-      function mostrarResultado(nome, desc, cor) {
+      function mostrarResultado(nome, frase, cor) {
         const el = document.getElementById('resultado');
         const nomeEl = document.getElementById('faceNome');
         const descEl = document.getElementById('faceDesc');
         nomeEl.textContent = nome;
         nomeEl.style.color = '#' + cor.toString(16).padStart(6, '0');
-        descEl.textContent = desc;
+        descEl.textContent = frase;
         el.style.display = 'block';
         setTimeout(() => {
           el.style.display = 'none';
         }, 6000);
       }
 
-      // Evento de toque/clique no ecrã
+      // Evento de toque/clique
       renderer.domElement.addEventListener('click', girarDado);
       renderer.domElement.addEventListener('touchstart', girarDado);
 
       window.girarDado = girarDado;
     }
 
-    // Ajustar tamanho
+    // Ajustar tamanho da janela
     function onResize() {
       const width = window.innerWidth;
       const height = window.innerHeight;
@@ -325,14 +355,18 @@
     // Loop de renderização
     function animate() {
       renderer.setAnimationLoop(() => {
+        // O grupo acompanha a câmara automaticamente
+        cameraGroup.position.copy(camera.position);
+        cameraGroup.position.z -= 5.5; // Distância fixa à frente
+        cameraGroup.rotation.copy(camera.rotation);
+        
         renderer.render(scene, camera);
       });
     }
     animate();
 
-    console.log('🧠 Dado da Saúde Mental em RV - Fixo na visão!');
+    console.log('🧠 Dado da Saúde Mental - RV com frases!');
     console.log('📱 Coloca o telemóvel nos óculos e diverte-te!');
-    console.log('🔄 Gira a cabeça 2x rapidamente para ativar o dado.');
   </script>
 </body>
 </html>
